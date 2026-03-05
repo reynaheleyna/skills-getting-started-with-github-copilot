@@ -8,6 +8,7 @@ for extracurricular activities at Mergington High School.
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
+from fastapi.responses import JSONResponse
 import os
 from pathlib import Path
 
@@ -85,7 +86,10 @@ def root():
 
 @app.get("/activities")
 def get_activities():
-    return activities
+    return JSONResponse(
+        content=activities,
+        headers={"Cache-Control": "no-store"},
+    )
 
 
 @app.post("/activities/{activity_name}/signup")
@@ -114,3 +118,28 @@ def signup_for_activity(activity_name: str, email: str):
 
     activity["participants"].append(normalized_email)
     return {"message": f"Signed up {normalized_email} for {activity_name}"}
+
+
+@app.delete("/activities/{activity_name}/participants")
+def unregister_from_activity(activity_name: str, email: str):
+    """Unregister a student from an activity"""
+    if activity_name not in activities:
+        raise HTTPException(status_code=404, detail="Activity not found")
+
+    activity = activities[activity_name]
+    normalized_email = email.strip().lower()
+
+    # Find an existing participant with case/whitespace-insensitive matching.
+    matching_participant = next(
+        (p for p in activity["participants"] if p.strip().lower() == normalized_email),
+        None,
+    )
+
+    if matching_participant is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"{email} is not signed up for {activity_name}",
+        )
+
+    activity["participants"].remove(matching_participant)
+    return {"message": f"Unregistered {matching_participant} from {activity_name}"}
